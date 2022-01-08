@@ -1,4 +1,9 @@
 import fetch from 'node-fetch';
+import cliProgress from 'cli-progress';
+import { existsSync, mkdirpSync } from 'fs-extra';
+import { dirname, join } from 'path';
+import moment from 'moment';
+import { writeFileSync } from 'fs';
 
 export const headers = {
 	"accept": "*/*",
@@ -10,6 +15,12 @@ export const headers = {
     "Referrer-Policy": "strict-origin-when-cross-origin"
 };
 
+const progressMultiBar = new cliProgress.MultiBar({
+    clearOnComplete: false,
+    hideCursor: true,
+    format: 'progress [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}'
+}, cliProgress.Presets.shades_grey);
+
 export interface FundManager {
 	id: number;
 	name: string;
@@ -18,36 +29,49 @@ export interface FundManager {
 	workingTime: number;
 }
 
-export async function requestFundManager(task: FundManager[] = [], curPage = 1): Promise<FundManager[]> {
-    const response = await fetch(`http://fund.eastmoney.com/Data/FundDataPortfolio_Interface.aspx?dt=14&mc=returnjson&ft=all&pi=${curPage}&sc=abbname&st=asc`, { headers });
-    const originData = await response.text();
-    const fixedData = originData.replace('var returnjson= ', '').replace(/data|record|pages|curpage/g, x => `"${x}"`);
-    const { data, pages } = JSON.parse(fixedData) as {
-        data: string[][];
-        record: number;
-        pages: number;
-    };
-    const managerList = [
-        ...task,
-        ...data.map(([id, name, companyId, _, fundList, __, workingTime]) => ({
-            id: Number(id),
-            name,
-            companyId: Number(companyId),
-            fundList: fundList.split(',').map(fundId => Number(fundId)),
-            workingTime: Number(workingTime),
-        })),
-    ];
-    if (curPage != pages) {
-        console.log('load page:', curPage);
-        return requestFundManager(managerList, ++curPage);
+export async function requestFundManager(): Promise<FundManager[]> {
+    let requestProgress: cliProgress.SingleBar | undefined;
+    async function requestFundManagerInner(task: FundManager[] = [], curPage = 1): Promise<FundManager[]> {
+        const response = await fetch(`http://fund.eastmoney.com/Data/FundDataPortfolio_Interface.aspx?dt=14&mc=returnjson&ft=all&pi=${curPage}&sc=abbname&st=asc`, { headers });
+        const originData = await response.text();
+        const fixedData = originData.replace('var returnjson= ', '').replace(/data|record|pages|curpage/g, x => `"${x}"`);
+        const { data, record, pages } = JSON.parse(fixedData) as {
+            data: string[][];
+            record: number;
+            pages: number;
+        };
+        if (!requestProgress) {
+            requestProgress = progressMultiBar.create(record, 0);
+        }
+        const managerList = [
+            ...task,
+            ...data.map(([id, name, companyId, _, fundList, __, workingTime]) => ({
+                id: Number(id),
+                name,
+                companyId: Number(companyId),
+                fundList: fundList.split(',').map(fundId => Number(fundId)),
+                workingTime: Number(workingTime),
+            })),
+        ];
+        if (curPage != pages) {
+            requestProgress.update(managerList.length);
+            return requestFundManagerInner(managerList, ++curPage);
+        }
+        requestProgress.stop();
+        progressMultiBar.remove(requestProgress);
+        return managerList;
     }
-    return managerList;
+    return requestFundManagerInner();
 }
 
 (async () => {
     const data = await requestFundManager();
-    // if (!existsSync(dir)) {
-    //     return;
-    // }
+    const time = moment().format('YYYY_MM_DD_HH_mm_ss');
+    const target = join(process.cwd(), './.storage', `./${time}`, './fund-manager.json');
+    const targetDir = dirname(target);
+    if (!existsSync(targetDir)) {
+        mkdirpSync(targetDir);
+    }
+    writeFileSync(target, JSON.stringify(data, null, 2));
     console.log(data);
 })();
