@@ -1,0 +1,35 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2020",
+        "importHelpers": true,
+        "resolveJsonModule": true,
+        "sourceMap": true,
+        "strict": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": false,
+        "noUnusedLocals": false,
+        "forceConsistentCasingInFileNames": true,
+        "isolatedModules": true,
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            // "@/*": ["packages/runtime/src/*"],
+            "@kma/model": ["packages/model/src"],
+            "@kma/share-utils": ["packages/share-utils/src"],
+        },
+        "lib": ["esnext"]
+    },
+    "include": [
+        "build/**/*",
+        "packages/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "**/node_modules/*"
+    ]
+}
